@@ -1,13 +1,21 @@
+import pickle
 import tempfile
 import unittest
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 from PIL import Image
 
 matplotlib.use("Agg")
 
-from src.exploration import explore_dataset, plot_examples, select_examples
+from src.exploration import (
+    CIFAR10_CLASSES,
+    explore_dataset,
+    plot_examples,
+    read_record_image,
+    select_examples,
+)
 
 
 class ExploreDatasetTests(unittest.TestCase):
@@ -37,6 +45,7 @@ class ExploreDatasetTests(unittest.TestCase):
             self.assertEqual(report.dimensions, {(12, 8): 3, (16, 8): 3})
             self.assertEqual(report.unlabeled_counts, {"seg_pred": 1})
             self.assertEqual(len(report.unreadable_files), 1)
+            self.assertIn("Fuente: Carpetas de imágenes etiquetadas", report.summary())
 
     def test_supports_nested_partition_wrappers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -73,6 +82,50 @@ class ExploreDatasetTests(unittest.TestCase):
 
             self.assertTrue(report.class_count_valid)
             self.assertEqual(report.class_names, class_names)
+
+    def test_reads_cifar10_batches_and_plots_labeled_examples(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "batches.meta").write_bytes(
+                pickle.dumps(
+                    {
+                        b"label_names": [
+                            class_name.encode("utf-8") for class_name in CIFAR10_CLASSES
+                        ]
+                    }
+                )
+            )
+            labels = list(range(10)) * 2
+            batch_data = np.arange(20 * 3072, dtype=np.uint8).reshape(20, 3072)
+            for batch_name in (
+                "data_batch_1",
+                "data_batch_2",
+                "data_batch_3",
+                "data_batch_4",
+                "data_batch_5",
+                "test_batch",
+            ):
+                (root / batch_name).write_bytes(
+                    pickle.dumps({b"data": batch_data, b"labels": labels})
+                )
+
+            report = explore_dataset(root)
+
+            self.assertTrue(report.class_count_valid)
+            self.assertEqual(report.class_names, CIFAR10_CLASSES)
+            self.assertEqual(report.total_labeled_images, 120)
+            self.assertEqual(report.partitions["data_batch_1"]["airplane"], 2)
+            self.assertEqual(report.partitions["test_batch"]["truck"], 2)
+            self.assertEqual(report.dimensions, {(32, 32): 120})
+            self.assertIn("Fuente: CIFAR-10:", report.summary())
+            selected = select_examples(report)
+            self.assertTrue(all(selected.values()))
+            example = read_record_image(selected["airplane"])
+            self.assertEqual(example.size, (32, 32))
+            self.assertEqual(example.mode, "RGB")
+            figure = plot_examples(report)
+            self.assertEqual(len(figure.axes), 10)
+            matplotlib.pyplot.close(figure)
 
     def test_rejects_class_counts_outside_the_supported_range(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

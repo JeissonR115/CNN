@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +18,7 @@ from src.data import (
     split_dataset,
 )
 from src.exploration import ImageRecord
+from src.exploration import CIFAR10_CLASSES
 
 
 class ImagePreprocessingTests(unittest.TestCase):
@@ -100,6 +102,56 @@ class DatasetSplitTests(unittest.TestCase):
 
             self.assertEqual(len(records), 24)
             self.assertTrue(all(record.partition == "seg_train" for record in records))
+
+    def test_cifar_split_uses_official_test_batch_without_leakage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "batches.meta").write_bytes(
+                pickle.dumps(
+                    {
+                        b"label_names": [
+                            class_name.encode("utf-8") for class_name in CIFAR10_CLASSES
+                        ]
+                    }
+                )
+            )
+            labels = list(range(10)) * 2
+            batch_data = np.zeros((20, 3072), dtype=np.uint8)
+            for batch_name in (
+                "data_batch_1",
+                "data_batch_2",
+                "data_batch_3",
+                "data_batch_4",
+                "data_batch_5",
+                "test_batch",
+            ):
+                (root / batch_name).write_bytes(
+                    pickle.dumps({b"data": batch_data, b"labels": labels})
+                )
+
+            splits = split_dataset(load_labeled_records(root))
+
+            self.assertEqual(
+                (
+                    len(splits.train),
+                    len(splits.validation),
+                    len(splits.test),
+                ),
+                (85, 15, 20),
+            )
+            self.assertEqual(
+                {record.partition for record in splits.test}, {"test_batch"}
+            )
+            training_paths = {
+                (record.path, record.sample_index)
+                for record in (*splits.train, *splits.validation)
+            }
+            test_paths = {(record.path, record.sample_index) for record in splits.test}
+            self.assertFalse(training_paths & test_paths)
+            self.assertEqual(
+                {record.class_name for record in splits.test},
+                set(CIFAR10_CLASSES),
+            )
 
 
 class AugmentationTests(unittest.TestCase):

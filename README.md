@@ -1,6 +1,6 @@
-# Clasificación de imágenes con CNN y Streamlit
+# Clasificación de CIFAR-10 con CNN y Streamlit
 
-Proyecto académico para entrenar una CNN con Intel Image Classification y probarla mediante una interfaz Streamlit.
+Proyecto académico para entrenar una CNN con CIFAR-10 y probarla mediante una interfaz Streamlit.
 
 ## Requisitos
 
@@ -32,40 +32,55 @@ python -m pip install -r requirements.txt
 
 ## Dataset
 
-El dataset candidato es [Intel Image Classification en Kaggle](https://www.kaggle.com/datasets/puneet6060/intel-image-classification). La página de Kaggle describe aproximadamente 25 000 imágenes de 150 × 150 en seis clases: `buildings`, `forest`, `glacier`, `mountain`, `sea` y `street`; son cifras publicadas por la fuente, no mediciones de los archivos locales.
+El proyecto lee directamente el dataset [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz), sin convertir sus lotes a archivos de imagen. El archivo comprimido incluye cinco lotes de entrenamiento, un lote oficial de prueba, metadatos de clases y 60 000 imágenes RGB de 32 × 32 en diez clases.
 
-1. Descarga y extrae el dataset fuera del repositorio, después de revisar sus condiciones de acceso y licencia.
-2. No agregues al repositorio las imágenes, archivos comprimidos ni credenciales de Kaggle.
-3. Usa como ruta de datos la carpeta extraída que contiene las particiones y directorios de clase. El flujo incorpora solo imágenes etiquetadas legibles; los archivos sin etiquetas se excluyen.
-4. El preprocesamiento compartido convierte cada imagen a RGB, la redimensiona a 128 × 128 y normaliza los canales `float32` a `[0, 1]` dividiendo los valores de 8 bits por 255. Las rutas etiquetadas se separan estratificadamente en 70 % train, 15 % validation y 15 % test con semilla 42. Las particiones son disjuntas; si no se puede conservar cada clase en las tres, el flujo falla explícitamente.
-5. Configura la ruta antes de iniciar el notebook:
+El dataset ya extraído debe tener esta estructura:
+
+```text
+data/cifar-10-batches-py/
+├── batches.meta
+├── data_batch_1
+├── data_batch_2
+├── data_batch_3
+├── data_batch_4
+├── data_batch_5
+└── test_batch
+```
+
+Si todavía no lo descargaste, guarda el archivo `cifar-10-python.tar.gz` dentro de `data/` y extráelo allí. `.gitignore` excluye `data/`, así que el dataset y el archivo comprimido no se subirán a Git.
+
+Las clases son `airplane`, `automobile`, `bird`, `cat`, `deer`, `dog`, `frog`, `horse`, `ship` y `truck`. El flujo usa los cinco lotes `data_batch_*` para crear una división estratificada 85 % train y 15 % validation; mantiene `test_batch` como prueba oficial y separado. No conviertas ni mezcles `test_batch` con los datos de entrenamiento. Las imágenes se convierten a RGB, se redimensionan a 128 × 128 y se normalizan a `float32` en `[0, 1]`.
+
+La ruta predeterminada del notebook es `data/cifar-10-batches-py`. Si está en otro lugar, configura la ruta antes de iniciarlo:
 
    ```bash
-   export CNN_DATASET_DIR="/ruta/al/dataset"
+   export CNN_DATASET_DIR="data/cifar-10-batches-py"
    ```
 
    En PowerShell:
 
    ```powershell
-   $env:CNN_DATASET_DIR = "C:\ruta\al\dataset"
+   $env:CNN_DATASET_DIR = "data\cifar-10-batches-py"
    ```
 
-La exploración está en `notebooks/entrenamiento.ipynb`. Resume conteos y dimensiones observadas, identifica archivos ilegibles y genera ejemplos reproducibles. Si el dataset no está disponible o no tiene entre 3 y 10 clases legibles, informa el bloqueo y no inicia entrenamiento.
+La exploración está en `notebooks/entrenamiento.ipynb`. Resume conteos y dimensiones y genera ejemplos reproducibles. También sigue siendo posible usar otro dataset organizado en carpetas etiquetadas.
 
 ## Entrenamiento
 
-Desde la raíz del repositorio y con el entorno virtual activado, ejecuta el pipeline con la ruta local del dataset:
+Desde la raíz del repositorio y con el entorno virtual activado, ejecuta el pipeline apuntando a la carpeta que contiene `batches.meta` y los lotes:
 
 ```bash
-python -m src.train --data-dir "/ruta/al/dataset"
+python -m src.train --data-dir "data/cifar-10-batches-py"
 ```
+
+El entrenamiento usa los cinco lotes de entrenamiento; el test oficial se reserva para evaluación desde el notebook. Para otros datasets organizados en carpetas de clases, pasa como ruta la carpeta raíz que las contiene.
 
 El entrenamiento genera `models/cnn_classifier.keras` (mejor checkpoint según `val_loss`) y `models/class_names.json` (arreglo de nombres en el mismo orden que las salidas softmax). Vuelve a cargar los artefactos y compara las predicciones antes de declarar el guardado como verificado. Ambos archivos se mantienen fuera de Git; entrena el modelo antes de iniciar la aplicación si no los tienes localmente.
 
 Para una prueba breve del pipeline se puede limitar el número de épocas, sin superar el máximo de 30:
 
 ```bash
-python -m src.train --data-dir "/ruta/al/dataset" --epochs 1
+python -m src.train --data-dir "data/cifar-10-batches-py" --epochs 1
 ```
 
 ## Aplicación Streamlit
@@ -80,7 +95,7 @@ La interfaz acepta imágenes JPEG o PNG legibles y muestra la clase predicha jun
 
 ## Notebook
 
-`notebooks/entrenamiento.ipynb` recorre la exploración, división, vista previa de aumentación, entrenamiento, curvas, métricas de test, matriz de confusión y ejemplos de predicción. Usa `src.train` y `src.predict` en lugar de duplicar el pipeline. Ábrelo desde VS Code con el kernel del entorno virtual o desde Colab después de clonar el repositorio e instalar `requirements.txt`. Configura `CNN_DATASET_DIR`; para una ejecución breve, `CNN_TRAINING_EPOCHS` acepta de 1 a 30 y su valor predeterminado es 30. Mantén las salidas del notebook limpias y no guardes imágenes del dataset, credenciales ni modelos generados.
+`notebooks/entrenamiento.ipynb` recorre la exploración, división, vista previa de aumentación, entrenamiento, curvas, métricas del test oficial CIFAR-10, matriz de confusión y ejemplos de predicción. Usa `src.train` y `src.predict` en lugar de duplicar el pipeline. Ábrelo desde VS Code con el kernel del entorno virtual o desde Colab después de clonar el repositorio e instalar `requirements.txt`. Para datos fuera de la ruta predeterminada, configura `CNN_DATASET_DIR`; para una ejecución breve, `CNN_TRAINING_EPOCHS` acepta de 1 a 30 y su valor predeterminado es 30. Mantén las salidas del notebook limpias y no guardes imágenes del dataset, credenciales ni modelos generados.
 
 ## Estructura del repositorio
 
@@ -113,4 +128,4 @@ La interfaz acepta imágenes JPEG o PNG legibles y muestra la clase predicha jun
     └── class_names.json           # Generado localmente; ignorado por Git
 ```
 
-En un checkout limpio solo se necesitan el código, `requirements.txt` y `README.md`: descarga el dataset localmente y entrena para generar los artefactos antes de usar Streamlit. No se requieren credenciales de Kaggle ni se deben agregar datos o modelos a Git. Consulta [PLAN_INGENIERIA.md](PLAN_INGENIERIA.md) para el alcance y los criterios de aceptación.
+En un checkout limpio solo se necesitan el código, `requirements.txt` y `README.md`: descarga y extrae CIFAR-10 localmente, y entrena para generar los artefactos antes de usar Streamlit. No se deben agregar datos o modelos a Git. Consulta [PLAN_INGENIERIA.md](PLAN_INGENIERIA.md) para el alcance y los criterios de aceptación.

@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 from sklearn.model_selection import train_test_split
 
-from src.exploration import ImageRecord, explore_dataset
+from src.exploration import ImageRecord, explore_dataset, read_record_image
 
 IMAGE_SIZE = (128, 128)
 SPLIT_SEED = 42
@@ -49,7 +49,12 @@ def load_labeled_records(dataset_root: str | Path) -> tuple[ImageRecord, ...]:
             f"{MIN_CLASSES} and {MAX_CLASSES} readable labeled classes; "
             f"found {len(report.class_names)}."
         )
-    return tuple(sorted(report.records, key=lambda record: str(record.path)))
+    return tuple(
+        sorted(
+            report.records,
+            key=lambda record: (str(record.path), record.sample_index or 0),
+        )
+    )
 
 
 def split_dataset(records: Sequence[ImageRecord]) -> DatasetSplits:
@@ -57,9 +62,11 @@ def split_dataset(records: Sequence[ImageRecord]) -> DatasetSplits:
         raise ValueError("Cannot split an empty labeled dataset.")
 
     record_list = tuple(records)
-    paths = [record.path.resolve() for record in record_list]
-    if len(set(paths)) != len(paths):
-        raise ValueError("Labeled dataset contains duplicate image paths.")
+    identities = [
+        (record.path.resolve(), record.sample_index) for record in record_list
+    ]
+    if len(set(identities)) != len(identities):
+        raise ValueError("Labeled dataset contains duplicate image records.")
 
     class_names = tuple(sorted({record.class_name for record in record_list}))
     if any(not name for name in class_names):
@@ -68,6 +75,48 @@ def split_dataset(records: Sequence[ImageRecord]) -> DatasetSplits:
         raise ValueError(
             f"Expected between {MIN_CLASSES} and {MAX_CLASSES} classes; "
             f"found {len(class_names)}."
+        )
+
+    cifar_records = [record for record in record_list if record.sample_index is not None]
+    if cifar_records and len(cifar_records) != len(record_list):
+        raise ValueError("CIFAR-10 records cannot be mixed with image-folder records.")
+    if cifar_records:
+        official_test = [
+            index
+            for index, record in enumerate(record_list)
+            if record.partition == "test_batch"
+        ]
+        train_pool = [
+            index
+            for index, record in enumerate(record_list)
+            if record.partition != "test_batch"
+        ]
+        if not official_test or not train_pool:
+            raise ValueError(
+                "CIFAR-10 requires training batches and the official test_batch."
+            )
+        training_labels = np.asarray(
+            [record_list[index].class_name for index in train_pool]
+        )
+        try:
+            train_indices, validation_indices = train_test_split(
+                train_pool,
+                test_size=0.15,
+                random_state=SPLIT_SEED,
+                stratify=training_labels,
+            )
+        except ValueError as error:
+            raise ValueError(
+                "Cannot create a stratified CIFAR-10 train/validation split. "
+                "Each class needs enough examples in the training batches."
+            ) from error
+        return DatasetSplits(
+            train=tuple(record_list[index] for index in sorted(train_indices)),
+            validation=tuple(
+                record_list[index] for index in sorted(validation_indices)
+            ),
+            test=tuple(record_list[index] for index in official_test),
+            class_names=class_names,
         )
 
     labels = np.asarray([record.class_name for record in record_list])
@@ -207,8 +256,9 @@ def plot_augmentation_examples(
         squeeze=False,
     )
     for row, record in enumerate(selected):
-        with Image.open(record.path) as image:
-            examples = augmentation_preview(image, seed=seed + row)
+        examples = augmentation_preview(
+            read_record_image(record), seed=seed + row
+        )
         for column, title in enumerate(columns):
             axis = axes[row, column]
             axis.imshow(examples[title])
@@ -249,11 +299,11 @@ def make_dataset(
     def samples():
         for record in record_list:
             try:
-                with Image.open(record.path) as image:
-                    pixels = preprocess_image(image)
+                pixels = preprocess_image(read_record_image(record))
             except (OSError, ValueError) as error:
                 raise RuntimeError(
-                    f"Could not read labeled image {record.path}."
+                    f"Could not read labeled image {record.path} "
+                    f"(sample {record.sample_index})."
                 ) from error
             yield pixels, np.int32(class_indices[record.class_name])
 
@@ -266,7 +316,9 @@ def make_dataset(
     )
     if shuffle:
         dataset = dataset.shuffle(
-            len(record_list), seed=seed, reshuffle_each_iteration=True
+            min(len(record_list), 1024),
+            seed=seed,
+            reshuffle_each_iteration=True,
         )
     if augment:
         augmenter = build_augmentation(seed)

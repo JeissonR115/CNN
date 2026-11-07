@@ -10,7 +10,7 @@ El entrenamiento deberá poder ejecutarse en Google Colab, y la aplicación debe
 
 ### Incluye
 
-- Selección y documentación de un dataset público de Kaggle con entre 3 y 10 clases.
+- Selección y documentación de un dataset público con entre 3 y 10 clases.
 - Exploración de datos y preprocesamiento de imágenes.
 - Separación de datos para entrenamiento, validación y prueba, evitando fuga de información.
 - Implementación y entrenamiento de una CNN con TensorFlow/Keras.
@@ -23,20 +23,19 @@ El entrenamiento deberá poder ejecutarse en Google Colab, y la aplicación debe
 - Despliegue en producción ni disponibilidad permanente en la nube.
 - Reentrenamiento del modelo desde la interfaz.
 - Garantía de predicciones correctas para imágenes ajenas a las categorías del dataset.
-- Inclusión de credenciales de Kaggle o de todos los archivos de imagen en el repositorio.
+- Inclusión del dataset completo o de artefactos grandes en el repositorio.
 
-## 3. Dataset candidato
+## 3. Dataset
 
-**Intel Image Classification** en Kaggle:
-[https://www.kaggle.com/datasets/puneet6060/intel-image-classification](https://www.kaggle.com/datasets/puneet6060/intel-image-classification)
+**CIFAR-10**, distribuido por la Universidad de Toronto:
+[https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz](https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz)
 
-- **Clases:** 6 — buildings, forest, glacier, mountain, sea y street.
-- **Formato:** imágenes RGB de aproximadamente 150 × 150 píxeles.
-- **Tamaño:** alrededor de 25 000 imágenes.
-- **Adecuación:** conjunto de tamaño moderado, con clases visualmente diferenciadas y resolución apta para un flujo de entrenamiento en Colab.
-- **Uso previsto:** revisar la organización y distribución de las particiones disponibles; separar validación desde entrenamiento si no existe una partición dedicada. Usar la partición de prueba solo para la evaluación final.
+- **Clases:** 10 — airplane, automobile, bird, cat, deer, dog, frog, horse, ship y truck.
+- **Formato:** imágenes RGB de 32 × 32 almacenadas en lotes serializados de Python.
+- **Tamaño:** 60 000 imágenes; 50 000 para entrenamiento y 10 000 en el lote oficial de prueba.
+- **Uso previsto:** separar los cinco lotes de entrenamiento en train y validation; reservar `test_batch` para la evaluación final.
 
-Antes de usarlo, verificar las condiciones de licencia y disponibilidad en Kaggle. Descargar los datos durante el entrenamiento o mediante Kaggle API configurada en Colab; no guardar credenciales ni datos voluminosos en Git.
+Descargar el archivo y extraerlo en `data/`. El código lee directamente los lotes y metadatos, sin convertir las imágenes a archivos individuales. No guardar datos voluminosos en Git.
 
 ## 4. Stack tecnológico
 
@@ -69,7 +68,7 @@ Las dimensiones, normalización y orden de clases usados al entrenar deben coinc
 └── .gitignore                   # Excluye datos, credenciales y artefactos grandes
 ```
 
-Los nombres pueden ajustarse a las convenciones del curso. No se deben versionar claves de Kaggle, datasets completos, cachés ni artefactos grandes sin autorización.
+Los nombres pueden ajustarse a las convenciones del curso. No se deben versionar credenciales, datasets completos, cachés ni artefactos grandes sin autorización.
 
 ## 6. Flujo de trabajo
 
@@ -86,7 +85,7 @@ Los nombres pueden ajustarse a las convenciones del curso. No se deben versionar
 
 | Riesgo                                                              | Mitigación                                                                                                                                               |
 | :------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dataset o enlace cambia, o requiere autenticación**               | Documentar la fuente, comprobar el acceso al inicio y usar Kaggle API sin incluir secretos en el repositorio.                                            |
+| **Dataset incompleto o en una ruta distinta**                       | Documentar la estructura esperada, comprobar los lotes al inicio y permitir configurar la ruta del dataset.                                              |
 | **Desbalance o variación entre clases**                             | Inspeccionar la distribución; reportar métricas por clase y considerar pesos de clase o aumento de datos.                                                |
 | **Sobreajuste**                                                     | Usar validación, aumento de datos y regularización; comparar curvas de entrenamiento y validación.                                                       |
 | **Fuga entre entrenamiento y prueba**                               | Mantener la partición de prueba separada hasta la evaluación final.                                                                                      |
@@ -99,7 +98,7 @@ Los nombres pueden ajustarse a las convenciones del curso. No se deben versionar
 
 _Criterios genéricos, pendientes de sustituirse o ponderarse cuando se disponga de la rúbrica oficial:_
 
-- [ ] El dataset está identificado con enlace, clases, tamaño aproximado y condiciones de acceso.
+- [ ] CIFAR-10 está identificado con enlace, clases, tamaño y estructura local esperada.
 - [ ] El notebook o flujo de entrenamiento se ejecuta en Colab desde la carga de datos hasta la evaluación, con instrucciones reproducibles.
 - [ ] El código prepara las imágenes de forma consistente y conserva una partición de prueba independiente.
 - [ ] El modelo CNN se entrena y se guarda en un formato que la aplicación puede cargar.

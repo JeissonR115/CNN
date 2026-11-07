@@ -64,7 +64,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--data-dir",
         required=True,
-        help="Root directory containing readable labeled class folders.",
+        help=(
+            "Dataset root: CIFAR-10 batch directory or labeled image-class folders."
+        ),
     )
     parser.add_argument(
         "--epochs",

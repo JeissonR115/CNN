@@ -1,17 +1,30 @@
 from __future__ import annotations
 
+import pickle
 import random
 from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image, UnidentifiedImageError
 
-DATASET_URL = (
-    "https://www.kaggle.com/datasets/"
-    "puneet6060/intel-image-classification"
+DATASET_URL = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+CIFAR10_CLASSES = (
+    "airplane",
+    "automobile",
+    "bird",
+    "cat",
+    "deer",
+    "dog",
+    "frog",
+    "horse",
+    "ship",
+    "truck",
 )
+CIFAR10_BATCHES = tuple(f"data_batch_{index}" for index in range(1, 6))
 IMAGE_EXTENSIONS = {".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 UNLABELED_PARTITIONS = {"pred", "prediction", "predictions", "seg_pred"}
 PARTITION_DIRECTORIES = {
@@ -32,6 +45,7 @@ class ImageRecord:
     class_name: str
     width: int
     height: int
+    sample_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -55,8 +69,13 @@ class DatasetReport:
         return len(self.records)
 
     def summary(self) -> str:
+        source = (
+            f"CIFAR-10: {DATASET_URL}"
+            if any(record.sample_index is not None for record in self.records)
+            else "Carpetas de imágenes etiquetadas"
+        )
         lines = [
-            f"Fuente candidata: {DATASET_URL}",
+            f"Fuente: {source}",
             f"Raíz medida: {self.root}",
             f"Clases con imágenes legibles: {len(self.class_names)}",
             (
@@ -129,6 +148,104 @@ def _partition_name(root: Path, class_root: Path) -> str:
     return relative.parts[0] if relative.parts else "dataset"
 
 
+@lru_cache(maxsize=6)
+def _read_cifar_batch(batch_path: Path) -> tuple[np.ndarray, tuple[int, ...]]:
+    try:
+        with batch_path.open("rb") as batch_file:
+            batch = pickle.load(batch_file, encoding="bytes")
+    except (OSError, EOFError, pickle.UnpicklingError, ValueError) as error:
+        raise ValueError(f"Could not read CIFAR-10 batch {batch_path}.") from error
+
+    data = np.asarray(batch.get(b"data"))
+    labels = batch.get(b"labels")
+    if (
+        data.ndim != 2
+        or data.shape[1] != 3 * 32 * 32
+        or labels is None
+        or len(labels) != len(data)
+        or any(not isinstance(label, (int, np.integer)) or not 0 <= label < 10 for label in labels)
+    ):
+        raise ValueError(f"CIFAR-10 batch has an invalid data or label format: {batch_path}.")
+    return data, tuple(int(label) for label in labels)
+
+
+def read_record_image(record: ImageRecord) -> Image.Image:
+    sample_index = getattr(record, "sample_index", None)
+    if sample_index is None:
+        try:
+            with Image.open(record.path) as image:
+                return image.convert("RGB").copy()
+        except (OSError, ValueError, UnidentifiedImageError) as error:
+            raise ValueError(f"Could not read image {record.path}.") from error
+
+    data, labels = _read_cifar_batch(record.path)
+    if not 0 <= sample_index < len(data):
+        raise ValueError(
+            f"CIFAR-10 sample index is out of range for {record.path}: "
+            f"{sample_index}."
+        )
+    pixels = data[sample_index].reshape(3, 32, 32).transpose(1, 2, 0)
+    return Image.fromarray(pixels.astype(np.uint8, copy=False), mode="RGB")
+
+
+def _explore_cifar10(
+    root: Path, *, min_classes: int, max_classes: int
+) -> DatasetReport:
+    required = ("batches.meta", *CIFAR10_BATCHES, "test_batch")
+    missing = [name for name in required if not (root / name).is_file()]
+    if missing:
+        raise ValueError(
+            f"Incomplete CIFAR-10 dataset at {root}; missing: {', '.join(missing)}."
+        )
+    try:
+        with (root / "batches.meta").open("rb") as metadata_file:
+            metadata = pickle.load(metadata_file, encoding="bytes")
+    except (OSError, EOFError, pickle.UnpicklingError, ValueError) as error:
+        raise ValueError(f"Could not read CIFAR-10 metadata in {root}.") from error
+    label_names = metadata.get(b"label_names")
+    if label_names is None:
+        raise ValueError(f"CIFAR-10 metadata has no label_names in {root}.")
+    class_names = tuple(
+        name.decode("utf-8") if isinstance(name, bytes) else str(name)
+        for name in label_names
+    )
+    if class_names != CIFAR10_CLASSES:
+        raise ValueError("CIFAR-10 metadata has unexpected class names.")
+
+    partitions: dict[str, dict[str, int]] = {}
+    records: list[ImageRecord] = []
+    for batch_name in (*CIFAR10_BATCHES, "test_batch"):
+        batch_path = root / batch_name
+        data, labels = _read_cifar_batch(batch_path)
+        counts = Counter(class_names[label] for label in labels)
+        partitions[batch_name] = {
+            class_name: counts.get(class_name, 0) for class_name in class_names
+        }
+        records.extend(
+            ImageRecord(
+                path=batch_path,
+                partition=batch_name,
+                class_name=class_names[label],
+                width=32,
+                height=32,
+                sample_index=index,
+            )
+            for index, label in enumerate(labels)
+        )
+
+    return DatasetReport(
+        root=root,
+        partitions=partitions,
+        unlabeled_counts={},
+        dimensions={(32, 32): len(records)},
+        unreadable_files=(),
+        records=tuple(records),
+        class_names=class_names,
+        min_classes=min_classes,
+        max_classes=max_classes,
+    )
+
+
 def explore_dataset(
     dataset_root: str | Path,
     *,
@@ -140,6 +257,10 @@ def explore_dataset(
         raise FileNotFoundError(f"Dataset directory does not exist: {root}")
     if min_classes < 1 or max_classes < min_classes:
         raise ValueError("Class-count limits must satisfy 1 <= min_classes <= max_classes.")
+    if (root / "batches.meta").exists():
+        return _explore_cifar10(
+            root, min_classes=min_classes, max_classes=max_classes
+        )
 
     search_directories = [root, *sorted(path for path in root.rglob("*") if path.is_dir())]
     class_roots: dict[str, dict[str, Path]] = {}
@@ -229,9 +350,9 @@ def explore_dataset(
 
 def select_examples(
     report: DatasetReport, *, seed: int = 42
-) -> dict[str, Path | None]:
+) -> dict[str, ImageRecord | None]:
     generator = random.Random(seed)
-    examples: dict[str, Path | None] = {}
+    examples: dict[str, ImageRecord | None] = {}
     for class_name in sorted(
         {record.class_name for record in report.records}
         | {
@@ -242,9 +363,8 @@ def select_examples(
         }
     ):
         candidates = sorted(
-            record.path
-            for record in report.records
-            if record.class_name == class_name
+            (record for record in report.records if record.class_name == class_name),
+            key=lambda record: (str(record.path), record.sample_index or 0),
         )
         examples[class_name] = generator.choice(candidates) if candidates else None
     return examples
@@ -261,13 +381,12 @@ def plot_examples(report: DatasetReport, *, seed: int = 42):
     figure, axes = plt.subplots(
         1, len(examples), figsize=(3 * len(examples), 3), squeeze=False
     )
-    for axis, (class_name, image_path) in zip(axes[0], examples.items()):
+    for axis, (class_name, record) in zip(axes[0], examples.items()):
         axis.set_title(class_name)
         axis.axis("off")
-        if image_path is None:
+        if record is None:
             axis.text(0.5, 0.5, "No readable example", ha="center", va="center")
             continue
-        with Image.open(image_path) as image:
-            axis.imshow(image.convert("RGB"))
+        axis.imshow(read_record_image(record))
     figure.tight_layout()
     return figure
