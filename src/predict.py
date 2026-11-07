@@ -57,13 +57,17 @@ def clear_prediction_cache() -> None:
     _load_model_and_classes.cache_clear()
 
 
+def load_prediction_resource() -> tuple[object, tuple[str, ...]]:
+    return _load_model_and_classes(
+        str(MODEL_PATH.resolve()), str(CLASS_NAMES_PATH.resolve())
+    )
+
+
 def predict(image: Image.Image) -> tuple[str, float]:
     if not isinstance(image, Image.Image):
         raise TypeError("image must be a readable PIL.Image.Image instance.")
     pixels = preprocess_image(image)
-    model, class_names = _load_model_and_classes(
-        str(MODEL_PATH.resolve()), str(CLASS_NAMES_PATH.resolve())
-    )
+    model, class_names = load_prediction_resource()
     output = model(np.expand_dims(pixels, axis=0), training=False)
     if hasattr(output, "numpy"):
         output = output.numpy()

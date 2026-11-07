@@ -7,7 +7,7 @@
 ## 2. Usage and repository documentation
 
 - [x] 2.1 Update `README.md` with the verified Python compatibility range, environment setup and dependency installation; verify every documented prerequisite matches the manifest and supported runtimes.
-- [ ] 2.2 Document dataset preparation, the `python -m src.train --data-dir <ruta>` command, required generated model artifacts, `streamlit run app.py`, notebook usage, and the final repository structure; verify referenced paths exist and commands match the implemented entry points.
+- [x] 2.2 Document dataset preparation, the `python -m src.train --data-dir <ruta>` command, required generated model artifacts, `streamlit run app.py`, notebook usage, and the final repository structure; verify referenced paths exist and commands match the implemented entry points.
 
 ## 3. Version-control exclusions
 
@@ -15,4 +15,4 @@
 
 ## 4. Delivery consistency
 
-- [ ] 4.1 Review the README, dependency manifest, ignore rules, and related training/Streamlit instructions together; verify a clean-checkout workflow is documented without requiring credentials, dataset files, or model artifacts to be committed.
+- [x] 4.1 Review the README, dependency manifest, ignore rules, and related training/Streamlit instructions together; verify a clean-checkout workflow is documented without requiring credentials, dataset files, or model artifacts to be committed.

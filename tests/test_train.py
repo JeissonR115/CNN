@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import subprocess
 import sys
 import tempfile
@@ -52,6 +53,10 @@ class TrainingPipelineTests(unittest.TestCase):
             self.assertEqual(len(history.epoch), 1)
             self.assertTrue(model_path.is_file())
             self.assertTrue(names_path.is_file())
+            self.assertEqual(
+                json.loads(names_path.read_text(encoding="utf-8")),
+                ["buildings", "forest", "sea"],
+            )
             reloaded = tf.keras.models.load_model(model_path)
             self.assertEqual(reloaded.output_shape, (None, 3))
 

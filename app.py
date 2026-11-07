@@ -9,8 +9,9 @@ from PIL import Image, UnidentifiedImageError
 
 @st.cache_resource
 def _prediction_api():
-    from src.predict import predict
+    from src.predict import load_prediction_resource, predict
 
+    load_prediction_resource()
     return predict
 
 
@@ -34,6 +35,12 @@ def main() -> None:
         "`models/class_names.json`."
     )
 
+    try:
+        predictor = _prediction_api()
+    except (FileNotFoundError, OSError, RuntimeError, TypeError, ValueError) as error:
+        predictor = None
+        st.error(f"Could not load model artifacts: {error}")
+
     uploaded_file = st.file_uploader(
         "Choose an image",
         type=["jpg", "jpeg", "png"],
@@ -45,9 +52,9 @@ def main() -> None:
             st.error(str(error))
         else:
             st.image(uploaded_image, caption="Uploaded image")
-            if st.button("Predict", type="primary"):
+            if st.button("Predict", type="primary", disabled=predictor is None):
                 try:
-                    class_name, confidence = _prediction_api()(uploaded_image)
+                    class_name, confidence = predictor(uploaded_image)
                     if (
                         not isinstance(class_name, str)
                         or not class_name.strip()

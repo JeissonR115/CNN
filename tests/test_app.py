@@ -31,6 +31,25 @@ class ImageUploadTests(unittest.TestCase):
         st.cache_resource.clear()
         predict_module.clear_prediction_cache()
 
+    @staticmethod
+    def create_artifacts(root: Path) -> tuple[Path, Path]:
+        import tensorflow as tf
+
+        model_path = root / "cnn_classifier.keras"
+        names_path = root / "class_names.json"
+        model = tf.keras.Sequential(
+            [
+                tf.keras.Input(shape=(128, 128, 3)),
+                tf.keras.layers.GlobalAveragePooling2D(),
+                tf.keras.layers.Dense(3, activation="softmax"),
+            ]
+        )
+        model.save(model_path)
+        names_path.write_text(
+            json.dumps(["buildings", "forest", "sea"]), encoding="utf-8"
+        )
+        return model_path, names_path
+
     def test_decodes_supported_jpeg_and_png_as_pil_rgb(self) -> None:
         for image_format in ("JPEG", "PNG"):
             with self.subTest(image_format=image_format):
@@ -46,18 +65,70 @@ class ImageUploadTests(unittest.TestCase):
 
     def test_prediction_resource_is_cached(self) -> None:
         self.clear_prediction_resources()
-        with patch("src.predict.predict") as predictor:
+        with (
+            patch("src.predict.load_prediction_resource"),
+            patch("src.predict.predict") as predictor,
+        ):
             self.assertIs(app._prediction_api(), app._prediction_api())
             self.assertIs(app._prediction_api(), predictor)
         self.clear_prediction_resources()
 
-    def test_streamlit_handles_invalid_uploads_artifact_errors_and_predictions(self) -> None:
-        import tensorflow as tf
-
+    def test_missing_artifacts_are_reported_on_app_startup(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            model_path = root / "cnn_classifier.keras"
-            names_path = root / "class_names.json"
+            self.clear_prediction_resources()
+            with (
+                patch.object(predict_module, "MODEL_PATH", root / "missing.keras"),
+                patch.object(
+                    predict_module, "CLASS_NAMES_PATH", root / "missing.json"
+                ),
+            ):
+                at = AppTest.from_file(
+                    str(Path(__file__).resolve().parents[1] / "app.py")
+                ).run()
+
+                self.assertTrue(
+                    any(
+                        "model artifact is missing" in element.value
+                        for element in at.error
+                    )
+                )
+                self.assertFalse(at.subheader)
+        self.clear_prediction_resources()
+
+    def test_unreadable_upload_shows_error_without_invoking_predictor(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self.clear_prediction_resources()
+            with (
+                patch.object(predict_module, "MODEL_PATH", root / "missing.keras"),
+                patch.object(
+                    predict_module, "CLASS_NAMES_PATH", root / "missing.json"
+                ),
+                patch("src.predict.predict") as predictor,
+            ):
+                at = AppTest.from_file(
+                    str(Path(__file__).resolve().parents[1] / "app.py")
+                ).run()
+                at.file_uploader[0].upload(
+                    "broken.png", b"not an image", "image/png"
+                ).run()
+
+                self.assertTrue(
+                    any(
+                        "not a readable JPEG or PNG" in element.value
+                        for element in at.error
+                    )
+                )
+                self.assertEqual(predictor.call_count, 0)
+                self.assertFalse(at.subheader)
+        self.clear_prediction_resources()
+
+    def test_streamlit_integrates_with_valid_saved_predictor_artifacts(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            model_path, names_path = self.create_artifacts(
+                Path(temporary_directory)
+            )
             self.clear_prediction_resources()
             with (
                 patch.object(predict_module, "MODEL_PATH", model_path),
@@ -67,44 +138,20 @@ class ImageUploadTests(unittest.TestCase):
                     str(Path(__file__).resolve().parents[1] / "app.py")
                 ).run()
                 at.file_uploader[0].upload(
-                    "broken.png", b"not an image", "image/png"
-                ).run()
-                self.assertIn(
-                    "The uploaded file is not a readable JPEG or PNG image.",
-                    [element.value for element in at.error],
-                )
-                self.assertFalse(at.subheader)
-
-                at.file_uploader[0].upload(
                     "sample.png", self.encoded_image("PNG"), "image/png"
                 ).run()
-                at.button[0].click().run()
-                self.assertTrue(
-                    any(
-                        "Trained model artifact is missing" in element.value
-                        for element in at.error
-                    )
-                )
-                self.assertFalse(at.subheader)
-
-                model = tf.keras.Sequential(
-                    [
-                        tf.keras.Input(shape=(128, 128, 3)),
-                        tf.keras.layers.GlobalAveragePooling2D(),
-                        tf.keras.layers.Dense(3, activation="softmax"),
-                    ]
-                )
-                model.save(model_path)
-                names_path.write_text(
-                    json.dumps(["buildings", "forest", "sea"]), encoding="utf-8"
-                )
-                predict_module.clear_prediction_cache()
                 at.button[0].click().run()
 
                 self.assertFalse(at.error)
                 self.assertEqual(len(at.subheader), 1)
                 self.assertTrue(
                     at.subheader[0].value.startswith("Predicted class: ")
+                )
+                self.assertTrue(
+                    any(
+                        value.startswith("Confidence:")
+                        for value in (element.value for element in at.markdown)
+                    )
                 )
                 self.assertTrue(at.progress)
                 self.assertGreaterEqual(at.progress[0].proto.value, 0)

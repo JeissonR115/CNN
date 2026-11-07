@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -173,6 +174,44 @@ class ClassifierTests(unittest.TestCase):
                     class_names_path=root / "bad_class_names.json",
                 )
             self.assertFalse((root / "bad_class_names.json").exists())
+
+    def test_artifact_verification_rejects_missing_and_changed_models(self) -> None:
+        import tensorflow as tf
+
+        class DifferentModel:
+            output_shape = (None, 3)
+
+            @staticmethod
+            def __call__(values, training: bool = False):
+                return tf.constant([[1.0, 0.0, 0.0]], dtype=tf.float32)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            sample = tf.zeros((1, 128, 128, 3), dtype=tf.float32)
+            model = build_classifier(3)
+            missing_path = root / "missing.keras"
+            with self.assertRaises(FileNotFoundError):
+                save_and_verify_artifacts(
+                    model,
+                    ("buildings", "forest", "sea"),
+                    sample,
+                    model_path=missing_path,
+                    class_names_path=root / "missing_classes.json",
+                )
+
+            model_path = root / "saved.keras"
+            model.save(model_path)
+            with patch(
+                "tensorflow.keras.models.load_model", return_value=DifferentModel()
+            ):
+                with self.assertRaisesRegex(RuntimeError, "predictions differ"):
+                    save_and_verify_artifacts(
+                        model,
+                        ("buildings", "forest", "sea"),
+                        sample,
+                        model_path=model_path,
+                        class_names_path=root / "different_classes.json",
+                    )
 
 
 if __name__ == "__main__":
