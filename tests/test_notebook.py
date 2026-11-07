@@ -48,6 +48,12 @@ class TrainingNotebookTests(unittest.TestCase):
         self.assertIn("pip", source)
         self.assertIn("cifar-10-python.tar.gz", source)
         self.assertIn("files.download", source)
+        self.assertIn("capture_output=True", source)
+
+        requirements = (NOTEBOOK_PATH.parents[1] / "requirements.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("numpy>=1.26,<2.2", requirements)
 
     def test_notebook_prediction_sampling_is_distinct_reproducible_and_capped(self) -> None:
         import matplotlib.pyplot as plt
