@@ -44,6 +44,10 @@ class TrainingNotebookTests(unittest.TestCase):
         )
         self.assertIn("from src.predict import predict", source)
         self.assertIn("replace=False", source)
+        self.assertIn("https://github.com/JeissonR115/CNN.git", source)
+        self.assertIn("pip", source)
+        self.assertIn("cifar-10-python.tar.gz", source)
+        self.assertIn("files.download", source)
 
     def test_notebook_prediction_sampling_is_distinct_reproducible_and_capped(self) -> None:
         import matplotlib.pyplot as plt
