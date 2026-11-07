@@ -36,16 +36,21 @@ El dataset candidato es [Intel Image Classification en Kaggle](https://www.kaggl
 
 1. Descarga y extrae el dataset fuera del repositorio, después de revisar sus condiciones de acceso y licencia.
 2. No agregues al repositorio las imágenes, archivos comprimidos ni credenciales de Kaggle.
-3. Usa como ruta de datos la carpeta extraída que contiene las imágenes etiquetadas organizadas por clase. El flujo de entrenamiento valida la estructura disponible; las particiones sin etiquetas no se usan para la división estratificada.
-4. Configura la ruta antes de iniciar el notebook:
+3. Usa como ruta de datos la carpeta extraída que contiene las particiones y directorios de clase. El flujo incorpora solo imágenes etiquetadas legibles; los archivos sin etiquetas se excluyen.
+4. El preprocesamiento compartido convierte cada imagen a RGB, la redimensiona a 128 × 128 y normaliza los canales `float32` a `[0, 1]` dividiendo los valores de 8 bits por 255. Las rutas etiquetadas se separan estratificadamente en 70 % train, 15 % validation y 15 % test con semilla 42. Las particiones son disjuntas; si no se puede conservar cada clase en las tres, el flujo falla explícitamente.
+5. Configura la ruta antes de iniciar el notebook:
 
    ```bash
    export CNN_DATASET_DIR="/ruta/al/dataset"
    ```
 
-   En Colab, asigna la ruta extraída a `CNN_DATASET_DIR` en una celda antes de ejecutar la exploración.
+   En PowerShell:
 
-La exploración está en `notebooks/entrenamiento.ipynb`. Resume conteos y dimensiones observadas, identifica archivos ilegibles y genera una cuadrícula reproducible; si el dataset no está disponible o no tiene entre 3 y 10 clases legibles, informa el bloqueo en lugar de validarlo.
+   ```powershell
+   $env:CNN_DATASET_DIR = "C:\ruta\al\dataset"
+   ```
+
+La exploración está en `notebooks/entrenamiento.ipynb`. Resume conteos y dimensiones observadas, identifica archivos ilegibles y genera ejemplos reproducibles. Si el dataset no está disponible o no tiene entre 3 y 10 clases legibles, informa el bloqueo y no inicia entrenamiento.
 
 ## Entrenamiento
 
@@ -55,27 +60,29 @@ Desde la raíz del repositorio y con el entorno virtual activado, ejecuta el pip
 python -m src.train --data-dir "/ruta/al/dataset"
 ```
 
-El entrenamiento genera `models/cnn_classifier.keras` y `models/class_names.json`. Esos artefactos se mantienen fuera de Git; debes entrenar el modelo antes de iniciar la aplicación si no los tienes localmente.
+El entrenamiento genera `models/cnn_classifier.keras` (mejor checkpoint según `val_loss`) y `models/class_names.json` (arreglo de nombres en el mismo orden que las salidas softmax). Vuelve a cargar los artefactos y compara las predicciones antes de declarar el guardado como verificado. Ambos archivos se mantienen fuera de Git; entrena el modelo antes de iniciar la aplicación si no los tienes localmente.
 
-> El comando estará disponible al implementar `src/train.py` según el contrato del proyecto.
+Para una prueba breve del pipeline se puede limitar el número de épocas, sin superar el máximo de 30:
+
+```bash
+python -m src.train --data-dir "/ruta/al/dataset" --epochs 1
+```
 
 ## Aplicación Streamlit
 
-Con los artefactos generados por el entrenamiento:
+Con los dos artefactos generados por el entrenamiento:
 
 ```bash
 streamlit run app.py
 ```
 
-La interfaz acepta imágenes JPEG o PNG y muestra la clase predicha junto con la confianza de esa predicción. El preprocesamiento y la inferencia se delegan al predictor compartido. Si reemplazas los artefactos mientras Streamlit está activo, reinicia el proceso para que no conserve el modelo anterior.
-
-> La aplicación estará disponible al implementar `app.py` e `src/predict.py` según los contratos del proyecto.
+La interfaz acepta imágenes JPEG o PNG legibles y muestra la clase predicha junto con la probabilidad de esa predicción. El preprocesamiento y la inferencia se delegan a `src.predict.predict`; las imágenes ilegibles, artefactos faltantes o incompatibles producen un error visible y no una predicción por defecto. Si reemplazas los artefactos mientras Streamlit está activo, reinicia el proceso para que no conserve el modelo anterior.
 
 ## Notebook
 
-El recorrido de exploración, entrenamiento, evaluación y predicción estará en `notebooks/entrenamiento.ipynb`. Se puede abrir desde VS Code o usar en Colab después de clonar el repositorio e instalar `requirements.txt`. Configura allí la ruta al dataset y no guardes salidas con imágenes, credenciales ni artefactos generados.
+`notebooks/entrenamiento.ipynb` recorre la exploración, división, vista previa de aumentación, entrenamiento, curvas, métricas de test, matriz de confusión y ejemplos de predicción. Usa `src.train` y `src.predict` en lugar de duplicar el pipeline. Ábrelo desde VS Code con el kernel del entorno virtual o desde Colab después de clonar el repositorio e instalar `requirements.txt`. Configura `CNN_DATASET_DIR`; para una ejecución breve, `CNN_TRAINING_EPOCHS` acepta de 1 a 30 y su valor predeterminado es 30. Mantén las salidas del notebook limpias y no guardes imágenes del dataset, credenciales ni modelos generados.
 
-## Estructura final prevista
+## Estructura del repositorio
 
 ```text
 .
@@ -88,13 +95,22 @@ El recorrido de exploración, entrenamiento, evaluación y predicción estará e
 │   └── entrenamiento.ipynb
 ├── src/
 │   ├── data.py
+│   ├── exploration.py
 │   ├── model.py
-│   ├── train.py
-│   └── predict.py
+│   ├── predict.py
+│   └── train.py
+├── tests/
+│   ├── test_app.py
+│   ├── test_data.py
+│   ├── test_exploration.py
+│   ├── test_model.py
+│   ├── test_notebook.py
+│   ├── test_predict.py
+│   └── test_train.py
 └── models/
     ├── .gitkeep
     ├── cnn_classifier.keras       # Generado localmente; ignorado por Git
     └── class_names.json           # Generado localmente; ignorado por Git
 ```
 
-Consulta [PLAN_INGENIERIA.md](PLAN_INGENIERIA.md) para el alcance, el flujo de trabajo y los criterios de aceptación.
+En un checkout limpio solo se necesitan el código, `requirements.txt` y `README.md`: descarga el dataset localmente y entrena para generar los artefactos antes de usar Streamlit. No se requieren credenciales de Kaggle ni se deben agregar datos o modelos a Git. Consulta [PLAN_INGENIERIA.md](PLAN_INGENIERIA.md) para el alcance y los criterios de aceptación.

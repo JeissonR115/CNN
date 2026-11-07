@@ -11,7 +11,7 @@
 
 ## 3. Version-control exclusions
 
-- [ ] 3.1 Create or update `.gitignore` for local environments, Kaggle credentials, downloaded datasets, caches, notebook outputs, and generated model artifacts while retaining required source files and placeholders; verify representative paths with `git check-ignore` and inspect that required project files remain trackable.
+- [x] 3.1 Create or update `.gitignore` for local environments, Kaggle credentials, downloaded datasets, caches, notebook outputs, and generated model artifacts while retaining required source files and placeholders; verify representative paths with `git check-ignore` and inspect that required project files remain trackable.
 
 ## 4. Delivery consistency
 
