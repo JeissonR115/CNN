@@ -1,0 +1,8 @@
+# Python 3.10 or later; TensorFlow must provide a wheel for the target platform.
+tensorflow>=2.16,<3
+numpy>=1.26,<2
+Pillow>=10,<12
+matplotlib>=3.8,<4
+scikit-learn>=1.4,<2
+streamlit>=1.32,<2
+ipykernel>=6.29,<7
