@@ -9,10 +9,10 @@ from PIL import Image, UnidentifiedImageError
 
 @st.cache_resource
 def _prediction_api():
-    from src.predict import load_prediction_resource, predict
+    from src.predict import load_prediction_resource, predict_all
 
     load_prediction_resource()
-    return predict
+    return predict_all
 
 
 def decode_uploaded_image(contents: bytes) -> Image.Image:
@@ -54,15 +54,26 @@ def main() -> None:
             st.image(uploaded_image, caption="Uploaded image")
             if st.button("Predict", type="primary", disabled=predictor is None):
                 try:
-                    class_name, confidence = predictor(uploaded_image)
-                    if (
-                        not isinstance(class_name, str)
-                        or not class_name.strip()
-                        or not isinstance(confidence, (int, float))
-                        or not math.isfinite(confidence)
-                        or not 0.0 <= confidence <= 1.0
-                    ):
+                    predictions = predictor(uploaded_image)
+                    if not predictions:
                         raise ValueError("Prediction API returned an invalid result.")
+                    class_name, confidence = predictions[0]
+                    if (
+                        any(
+                            not isinstance(name, str)
+                            or not name.strip()
+                            or not isinstance(probability, (int, float))
+                            or not math.isfinite(probability)
+                            or not 0.0 <= probability <= 1.0
+                            for name, probability in predictions
+                        )
+                        or len({name for name, _ in predictions}) != len(predictions)
+                        or any(
+                            predictions[index][1] < predictions[index + 1][1]
+                            for index in range(len(predictions) - 1)
+                        )
+                    ):
+                        raise ValueError("Prediction API returned invalid probabilities.")
                 except (
                     FileNotFoundError,
                     OSError,
@@ -75,6 +86,23 @@ def main() -> None:
                     st.subheader(f"Predicted class: {class_name}")
                     st.write(f"Confidence: {confidence:.1%}")
                     st.progress(float(confidence), text="Predicted-class probability")
+                    st.subheader("Probabilities by class")
+                    import matplotlib.pyplot as plt
+
+                    figure, axis = plt.subplots(figsize=(8, 4))
+                    axis.bar(
+                        [name for name, _ in predictions],
+                        [probability for _, probability in predictions],
+                    )
+                    axis.set(
+                        xlabel="Class",
+                        ylabel="Probability",
+                        ylim=(0.0, 1.0),
+                    )
+                    axis.tick_params(axis="x", labelrotation=45)
+                    figure.tight_layout()
+                    st.pyplot(figure)
+                    plt.close(figure)
 
 
 if __name__ == "__main__":

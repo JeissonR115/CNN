@@ -24,9 +24,9 @@ class ClassifierTests(unittest.TestCase):
             with self.subTest(class_count=class_count):
                 model = build_classifier(class_count)
                 probabilities = model(
-                    tf.zeros((1, 128, 128, 3), dtype=tf.float32), training=False
+                    tf.zeros((1, 32, 32, 3), dtype=tf.float32), training=False
                 )
-                self.assertEqual(model.input_shape, (None, 128, 128, 3))
+                self.assertEqual(model.input_shape, (None, 32, 32, 3))
                 self.assertEqual(model.output_shape, (None, class_count))
                 self.assertAlmostEqual(float(tf.reduce_sum(probabilities[0])), 1.0, 5)
                 self.assertEqual(
@@ -37,20 +37,9 @@ class ClassifierTests(unittest.TestCase):
                             if isinstance(layer, tf.keras.layers.Conv2D)
                         ]
                     ),
-                    6,
+                    3,
                 )
-                self.assertEqual(
-                    len(
-                        [
-                            layer
-                            for layer in model.layers
-                            if isinstance(
-                                layer, tf.keras.layers.BatchNormalization
-                            )
-                        ]
-                    ),
-                    6,
-                )
+                self.assertEqual(model.count_params(), 355520 + 129 * class_count)
                 self.assertEqual(
                     len(
                         [
@@ -61,7 +50,6 @@ class ClassifierTests(unittest.TestCase):
                     ),
                     3,
                 )
-                self.assertEqual(model.get_layer("block1_dropout").rate, 0.25)
                 self.assertEqual(model.get_layer("dense_dropout").rate, 0.5)
 
     def test_compile_and_callback_configuration(self) -> None:
@@ -156,7 +144,7 @@ class ClassifierTests(unittest.TestCase):
             model = build_classifier(3)
             model_path = root / "cnn_classifier.keras"
             model.save(model_path)
-            sample = tf.zeros((1, 128, 128, 3), dtype=tf.float32)
+            sample = tf.zeros((1, 32, 32, 3), dtype=tf.float32)
 
             save_and_verify_artifacts(
                 model,
@@ -187,7 +175,7 @@ class ClassifierTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            sample = tf.zeros((1, 128, 128, 3), dtype=tf.float32)
+            sample = tf.zeros((1, 32, 32, 3), dtype=tf.float32)
             model = build_classifier(3)
             missing_path = root / "missing.keras"
             with self.assertRaises(FileNotFoundError):

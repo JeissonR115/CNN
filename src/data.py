@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 
 from src.exploration import ImageRecord, explore_dataset, read_record_image
 
-IMAGE_SIZE = (128, 128)
+IMAGE_SIZE = (32, 32)
 SPLIT_SEED = 42
 MIN_CLASSES = 3
 MAX_CLASSES = 10
@@ -310,7 +310,7 @@ def make_dataset(
     dataset = tf.data.Dataset.from_generator(
         samples,
         output_signature=(
-            tf.TensorSpec(shape=(128, 128, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(IMAGE_SIZE[1], IMAGE_SIZE[0], 3), dtype=tf.float32),
             tf.TensorSpec(shape=(), dtype=tf.int32),
         ),
     )

@@ -49,7 +49,7 @@ data/cifar-10-batches-py/
 
 Si todavía no lo descargaste, guarda el archivo `cifar-10-python.tar.gz` dentro de `data/` y extráelo allí. `.gitignore` excluye `data/`, así que el dataset y el archivo comprimido no se subirán a Git.
 
-Las clases son `airplane`, `automobile`, `bird`, `cat`, `deer`, `dog`, `frog`, `horse`, `ship` y `truck`. El flujo usa los cinco lotes `data_batch_*` para crear una división estratificada 85 % train y 15 % validation; mantiene `test_batch` como prueba oficial y separado. No conviertas ni mezcles `test_batch` con los datos de entrenamiento. Las imágenes se convierten a RGB, se redimensionan a 128 × 128 y se normalizan a `float32` en `[0, 1]`.
+Las clases son `airplane`, `automobile`, `bird`, `cat`, `deer`, `dog`, `frog`, `horse`, `ship` y `truck`. El flujo usa los cinco lotes `data_batch_*` para crear una división estratificada 85 % train y 15 % validation; mantiene `test_batch` como prueba oficial y separado. No conviertas ni mezcles `test_batch` con los datos de entrenamiento. Las imágenes se convierten a RGB, se conservan a 32 × 32 y se normalizan a `float32` en `[0, 1]`.
 
 La ruta predeterminada del notebook es `data/cifar-10-batches-py`. Si está en otro lugar, configura la ruta antes de iniciarlo:
 
@@ -77,7 +77,9 @@ El entrenamiento usa los cinco lotes de entrenamiento; el test oficial se reserv
 
 El entrenamiento genera `models/cnn_classifier.keras` (mejor checkpoint según `val_loss`) y `models/class_names.json` (arreglo de nombres en el mismo orden que las salidas softmax). Vuelve a cargar los artefactos y compara las predicciones antes de declarar el guardado como verificado. Ambos archivos se mantienen fuera de Git; entrena el modelo antes de iniciar la aplicación si no los tienes localmente.
 
-Para una prueba breve del pipeline se puede limitar el número de épocas, sin superar el máximo de 30:
+La CNN recibe imágenes de 32 × 32 y tiene tres capas convolucionales, seguida de una capa densa de 128 unidades. Para iniciar rápidamente, el entrenamiento usa 2 épocas por defecto; puedes configurar entre 1 y 30 con `--epochs`. Si ya tenías un modelo entrenado con la arquitectura anterior de 128 × 128, vuelve a entrenar para regenerar los artefactos compatibles.
+
+Para una prueba breve se puede cambiar el número predeterminado de épocas, sin superar el máximo de 30:
 
 ```bash
 python -m src.train --data-dir "data/cifar-10-batches-py" --epochs 1
@@ -95,7 +97,9 @@ La interfaz acepta imágenes JPEG o PNG legibles y muestra la clase predicha jun
 
 ## Notebook
 
-`notebooks/entrenamiento.ipynb` recorre la exploración, división, vista previa de aumentación, entrenamiento, curvas, métricas del test oficial CIFAR-10, matriz de confusión y ejemplos de predicción. Usa `src.train` y `src.predict` en lugar de duplicar el pipeline. En Google Colab, abre el notebook desde GitHub, selecciona **Runtime → Change runtime type** y elige una GPU si está disponible; la primera celda clona el repositorio, instala `requirements.txt` y descarga CIFAR-10 si hace falta. Ejecuta las demás celdas en orden. Para limitar el entrenamiento, establece `CNN_TRAINING_EPOCHS` entre 1 y 30 antes de la celda de entrenamiento. La última sección permite descargar los artefactos generados, ya que el almacenamiento de Colab es temporal. Localmente, abre el notebook desde VS Code con el kernel del entorno virtual y la primera celda usa el dataset local. Para datos fuera de la ruta predeterminada, configura `CNN_DATASET_DIR`. Mantén las salidas del notebook limpias y no guardes imágenes del dataset, credenciales ni modelos generados.
+`notebooks/entrenamiento.ipynb` recorre la exploración, división, vista previa de aumentación, entrenamiento, curvas, métricas del test oficial CIFAR-10, matriz de confusión y ejemplos de predicción. Usa `src.train` y `src.predict` en lugar de duplicar el pipeline. En Google Colab, abre el notebook desde GitHub, selecciona **Runtime → Change runtime type** y elige una GPU si está disponible; la primera celda clona el repositorio, instala `requirements.txt` y descarga CIFAR-10 si hace falta. Ejecuta las demás celdas en orden. El entrenamiento usa dos épocas por defecto para una prueba rápida; configura `CNN_TRAINING_EPOCHS` entre 1 y 30 para cambiarlo. La última sección permite descargar los artefactos generados, ya que el almacenamiento de Colab es temporal. Localmente, abre el notebook desde VS Code con el kernel del entorno virtual y la primera celda usa el dataset local. Para datos fuera de la ruta predeterminada, configura `CNN_DATASET_DIR`. Mantén las salidas del notebook limpias y no guardes imágenes del dataset, credenciales ni modelos generados.
+
+La aplicación también se puede iniciar con `streamlit run app.py`; muestra la clase predicha, su confianza y una gráfica ordenada con las probabilidades de todas las clases. Para clasificar directamente desde la terminal después de entrenar, usa `python -m src.predict ruta/a/imagen.jpg`.
 
 ## Estructura del repositorio
 

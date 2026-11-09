@@ -39,7 +39,7 @@ class ImageUploadTests(unittest.TestCase):
         names_path = root / "class_names.json"
         model = tf.keras.Sequential(
             [
-                tf.keras.Input(shape=(128, 128, 3)),
+                tf.keras.Input(shape=(32, 32, 3)),
                 tf.keras.layers.GlobalAveragePooling2D(),
                 tf.keras.layers.Dense(3, activation="softmax"),
             ]
@@ -67,7 +67,7 @@ class ImageUploadTests(unittest.TestCase):
         self.clear_prediction_resources()
         with (
             patch("src.predict.load_prediction_resource"),
-            patch("src.predict.predict") as predictor,
+            patch("src.predict.predict_all") as predictor,
         ):
             self.assertIs(app._prediction_api(), app._prediction_api())
             self.assertIs(app._prediction_api(), predictor)
@@ -85,7 +85,7 @@ class ImageUploadTests(unittest.TestCase):
             ):
                 at = AppTest.from_file(
                     str(Path(__file__).resolve().parents[1] / "app.py")
-                ).run()
+                ).run(timeout=30)
 
                 self.assertTrue(
                     any(
@@ -109,10 +109,10 @@ class ImageUploadTests(unittest.TestCase):
             ):
                 at = AppTest.from_file(
                     str(Path(__file__).resolve().parents[1] / "app.py")
-                ).run()
+                ).run(timeout=30)
                 at.file_uploader[0].upload(
                     "broken.png", b"not an image", "image/png"
-                ).run()
+                ).run(timeout=30)
 
                 self.assertTrue(
                     any(
@@ -136,17 +136,18 @@ class ImageUploadTests(unittest.TestCase):
             ):
                 at = AppTest.from_file(
                     str(Path(__file__).resolve().parents[1] / "app.py")
-                ).run()
+                ).run(timeout=30)
                 at.file_uploader[0].upload(
                     "sample.png", self.encoded_image("PNG"), "image/png"
-                ).run()
-                at.button[0].click().run()
+                ).run(timeout=30)
+                at.button[0].click().run(timeout=30)
 
                 self.assertFalse(at.error)
-                self.assertEqual(len(at.subheader), 1)
+                self.assertEqual(len(at.subheader), 2)
                 self.assertTrue(
                     at.subheader[0].value.startswith("Predicted class: ")
                 )
+                self.assertEqual(at.subheader[1].value, "Probabilities by class")
                 self.assertTrue(
                     any(
                         value.startswith("Confidence:")

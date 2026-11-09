@@ -26,7 +26,7 @@ class ImagePreprocessingTests(unittest.TestCase):
         for mode, color in (("RGB", (0, 127, 255)), ("L", 128), ("RGBA", (1, 2, 3, 4))):
             with self.subTest(mode=mode):
                 result = preprocess_image(Image.new(mode, (19, 7), color=color))
-                self.assertEqual(result.shape, (128, 128, 3))
+                self.assertEqual(result.shape, (32, 32, 3))
                 self.assertEqual(result.dtype, np.float32)
                 self.assertGreaterEqual(float(result.min()), 0.0)
                 self.assertLessEqual(float(result.max()), 1.0)
@@ -158,13 +158,13 @@ class AugmentationTests(unittest.TestCase):
     def test_training_augmentation_is_finite_and_clipped(self) -> None:
         import tensorflow as tf
 
-        image = np.linspace(0.0, 1.0, 128 * 128 * 3, dtype=np.float32).reshape(
-            (1, 128, 128, 3)
+        image = np.linspace(0.0, 1.0, 32 * 32 * 3, dtype=np.float32).reshape(
+            (1, 32, 32, 3)
         )
         augmenter = build_augmentation(seed=7)
         augmented = tf.clip_by_value(augmenter(image, training=True), 0.0, 1.0)
 
-        self.assertEqual(tuple(augmented.shape), (1, 128, 128, 3))
+        self.assertEqual(tuple(augmented.shape), (1, 32, 32, 3))
         self.assertTrue(bool(tf.reduce_all(tf.math.is_finite(augmented))))
         self.assertGreaterEqual(float(tf.reduce_min(augmented)), 0.0)
         self.assertLessEqual(float(tf.reduce_max(augmented)), 1.0)
@@ -187,7 +187,7 @@ class AugmentationTests(unittest.TestCase):
         )
         for name in first:
             with self.subTest(transformation=name):
-                self.assertEqual(first[name].shape, (128, 128, 3))
+                self.assertEqual(first[name].shape, (32, 32, 3))
                 self.assertTrue(np.isfinite(first[name]).all())
                 self.assertGreaterEqual(float(first[name].min()), 0.0)
                 self.assertLessEqual(float(first[name].max()), 1.0)

@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 from typing import Any
 
+from src.data import IMAGE_SIZE
+
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "cnn_classifier.keras"
 CLASS_NAMES_PATH = MODEL_PATH.with_name("class_names.json")
 MAX_EPOCHS = 30
+DEFAULT_EPOCHS = 2
 BATCH_SIZE = 32
 
 
@@ -16,25 +19,18 @@ def build_classifier(num_classes: int):
     if not 3 <= num_classes <= 10:
         raise ValueError("num_classes must be between 3 and 10.")
 
-    inputs = tf.keras.Input(shape=(128, 128, 3), name="image")
+    inputs = tf.keras.Input(shape=(IMAGE_SIZE[1], IMAGE_SIZE[0], 3), name="image")
     values = inputs
     for block, filters in enumerate((32, 64, 128), start=1):
-        for layer in range(1, 3):
-            values = tf.keras.layers.Conv2D(
-                filters,
-                kernel_size=3,
-                padding="same",
-                activation="relu",
-                name=f"block{block}_conv{layer}",
-            )(values)
-            values = tf.keras.layers.BatchNormalization(
-                name=f"block{block}_batch_norm{layer}"
-            )(values)
+        values = tf.keras.layers.Conv2D(
+            filters,
+            kernel_size=3,
+            padding="same",
+            activation="relu",
+            name=f"block{block}_conv",
+        )(values)
         values = tf.keras.layers.MaxPooling2D(
             pool_size=2, name=f"block{block}_pool"
-        )(values)
-        values = tf.keras.layers.Dropout(
-            0.25, name=f"block{block}_dropout"
         )(values)
     values = tf.keras.layers.Flatten(name="flatten")(values)
     values = tf.keras.layers.Dense(128, activation="relu", name="dense_128")(values)
@@ -91,7 +87,7 @@ def fit_classifier(
     validation_data: Any,
     *,
     checkpoint_path: str | Path = MODEL_PATH,
-    epochs: int = MAX_EPOCHS,
+    epochs: int = DEFAULT_EPOCHS,
 ) -> Any:
     if validation_data is None:
         raise ValueError("Validation data is required because callbacks monitor val_loss.")

@@ -11,6 +11,7 @@ from src.data import (
 from src.model import (
     BATCH_SIZE,
     CLASS_NAMES_PATH,
+    DEFAULT_EPOCHS,
     MAX_EPOCHS,
     MODEL_PATH,
     build_classifier,
@@ -22,7 +23,7 @@ from src.model import (
 def train(
     dataset_root: str | Path,
     *,
-    epochs: int = MAX_EPOCHS,
+    epochs: int = DEFAULT_EPOCHS,
 ):
     records = load_labeled_records(dataset_root)
     splits = split_dataset(records)
@@ -71,8 +72,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--epochs",
         type=int,
-        default=MAX_EPOCHS,
-        help=f"Maximum training epochs (1-{MAX_EPOCHS}; default: {MAX_EPOCHS}).",
+        default=DEFAULT_EPOCHS,
+        help=(
+            f"Maximum training epochs (1-{MAX_EPOCHS}; "
+            f"default: {DEFAULT_EPOCHS})."
+        ),
     )
     arguments = parser.parse_args(argv)
     try:

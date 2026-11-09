@@ -15,14 +15,14 @@ from src.model import CLASS_NAMES_PATH, MODEL_PATH
 def _load_model_and_classes(
     model_path: str, class_names_path: str
 ) -> tuple[object, tuple[str, ...]]:
-    import tensorflow as tf
-
     model_file = Path(model_path)
     names_file = Path(class_names_path)
     if not model_file.is_file():
         raise FileNotFoundError(f"Trained model artifact is missing: {model_file}.")
     if not names_file.is_file():
         raise FileNotFoundError(f"Class-name artifact is missing: {names_file}.")
+    import tensorflow as tf
+
     try:
         model = tf.keras.models.load_model(model_file)
     except (OSError, ValueError, TypeError) as error:
@@ -63,7 +63,7 @@ def load_prediction_resource() -> tuple[object, tuple[str, ...]]:
     )
 
 
-def predict(image: Image.Image) -> tuple[str, float]:
+def predict_all(image: Image.Image) -> tuple[tuple[str, float], ...]:
     if not isinstance(image, Image.Image):
         raise TypeError("image must be a readable PIL.Image.Image instance.")
     pixels = preprocess_image(image)
@@ -82,5 +82,34 @@ def predict(image: Image.Image) -> tuple[str, float]:
     if np.any(probabilities < 0.0) or np.any(probabilities > 1.0):
         raise ValueError("Model probabilities must be in the range [0, 1].")
 
-    predicted_index = int(np.argmax(probabilities[0]))
-    return class_names[predicted_index], float(probabilities[0, predicted_index])
+    ranked_indices = np.argsort(probabilities[0])[::-1]
+    return tuple(
+        (class_names[int(index)], float(probabilities[0, index]))
+        for index in ranked_indices
+    )
+
+
+def predict(image: Image.Image) -> tuple[str, float]:
+    ranked_predictions = predict_all(image)
+    return ranked_predictions[0]
+
+
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Classify a JPEG or PNG image using the trained CNN."
+    )
+    parser.add_argument("image", type=Path, help="Path to the image to classify.")
+    arguments = parser.parse_args(argv)
+    try:
+        with Image.open(arguments.image) as image:
+            class_name, confidence = predict(image.convert("RGB"))
+    except (OSError, ValueError) as error:
+        parser.error(f"Could not read or classify {arguments.image}: {error}")
+    print(f"Class: {class_name}")
+    print(f"Confidence: {confidence:.2%}")
+
+
+if __name__ == "__main__":
+    main()

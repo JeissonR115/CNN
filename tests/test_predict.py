@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from src.data import preprocess_image
-from src.predict import _load_model_and_classes, predict
+from src.predict import _load_model_and_classes, predict, predict_all
 
 
 class PredictionTests(unittest.TestCase):
@@ -40,7 +40,29 @@ class PredictionTests(unittest.TestCase):
         np.testing.assert_array_equal(
             model.values[0], preprocess_image(image)
         )
-        self.assertEqual(model.values.shape, (1, 128, 128, 3))
+        self.assertEqual(model.values.shape, (1, 32, 32, 3))
+
+    def test_predict_all_returns_all_classes_in_descending_probability_order(self) -> None:
+        class FakeModel:
+            output_shape = (None, 3)
+
+            def __call__(self, values, training: bool = False):
+                return np.asarray([[0.1, 0.75, 0.15]], dtype=np.float32)
+
+        with patch(
+            "src.predict._load_model_and_classes",
+            return_value=(FakeModel(), ("airplane", "bird", "cat")),
+        ):
+            predictions = predict_all(Image.new("RGB", (32, 32)))
+
+        self.assertEqual(
+            tuple(name for name, _ in predictions),
+            ("bird", "cat", "airplane"),
+        )
+        np.testing.assert_allclose(
+            [probability for _, probability in predictions],
+            [0.75, 0.15, 0.1],
+        )
 
     def test_non_pil_inputs_are_rejected(self) -> None:
         with self.assertRaisesRegex(TypeError, "PIL.Image.Image"):
@@ -72,7 +94,7 @@ class PredictionTests(unittest.TestCase):
             model_path = root / "model.keras"
             model = tf.keras.Sequential(
                 [
-                    tf.keras.Input(shape=(128, 128, 3)),
+                    tf.keras.Input(shape=(32, 32, 3)),
                     tf.keras.layers.GlobalAveragePooling2D(),
                     tf.keras.layers.Dense(3, activation="softmax"),
                 ]
